@@ -671,8 +671,8 @@ def main(*args, **kwargs):
                         help="write output in plain text format instead of the default <doc> format")
     groupO.add_argument("--markdown", action="store_true", default=False,
                         help="parse text content to Markdown format (sections titles with #, ##, ### ...)")
-    groupO.add_argument("-c", "--compress", action="store_true",
-                        help="compress output files using bzip")
+    groupO.add_argument("-c", "--compress", choices=["bzip", "gzip"], default=None,
+                        help="compress output files using bzip or gzip")
 
     groupP = parser.add_argument_group('Processing')
     groupP.add_argument("--templates",
