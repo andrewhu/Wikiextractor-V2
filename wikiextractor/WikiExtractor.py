@@ -48,6 +48,7 @@ extract_path = os.path.realpath(os.path.abspath(os.path.join(os.path.split(inspe
 if extract_path not in sys.path:
      sys.path.insert(0, extract_path)
 from extract import Extractor, ignoreTag, define_template, acceptedNamespaces
+import gzip
 
 
 FORMAT = '[%(asctime)s][%(name)s][%(levelname)s] - %(message)s'
@@ -112,6 +113,9 @@ modules = {
 # Minimum size of output files
 minFileSize = 200 * 1024
 
+# Min padding amount
+minPadding = 3
+
 
 class NextFile():
 
@@ -121,11 +125,12 @@ class NextFile():
 
     # filesPerDir = 100
 
-    def __init__(self, path_name, extension):
+    def __init__(self, path_name, extension, padding=minPadding):
         self.path_name = path_name
         self.extension = extension
         self.dir_index = -1
         self.file_index = -1
+        self.padding = padding
 
     def next(self):
         self.file_index = self.file_index + 1
@@ -144,7 +149,7 @@ class NextFile():
         # return os.path.join(self.path_name, '%c%c' % (ord('A') + char2, ord('A') + char1))
 
     def _filepath(self):
-        name = '%s/wiki_%02d' % (self._dirname(), self.file_index)
+        name = f"%s/wiki_%0{self.padding}d" % (self._dirname(), self.file_index)
         return name + self.extension
 
 
@@ -154,15 +159,15 @@ class OutputSplitter():
     File-like object, that splits output to multiple files of a given max size.
     """
 
-    def __init__(self, nextFile, max_file_size=0, compress=True):
+    def __init__(self, nextFile, max_file_size=0, file_compress: str = None):
         """
         :param nextFile: a NextFile object from which to obtain filenames
             to use.
         :param max_file_size: the maximum size of each file.
-        :para compress: whether to write data with bzip compression.
+        :para compress: whether to write data with compression.
         """
         self.nextFile = nextFile
-        self.compress = compress
+        self.compress = file_compress
         self.max_file_size = max_file_size
         self.file = self.open(self.nextFile.next())
 
@@ -173,17 +178,16 @@ class OutputSplitter():
 
     def write(self, data):
         self.reserve(len(data))
-        if self.compress:
-            self.file.write(data)
-        else:
-            self.file.write(data)
+        self.file.write(data)
 
     def close(self):
         self.file.close()
 
     def open(self, filename):
-        if self.compress:
+        if self.compress == 'bzip':
             return bz2.BZ2File(filename + '.bz2', 'w')
+        elif self.compress == 'gzip':
+            return gzip.open(filename + '.gz', 'wt')
         else:
             return open(filename, 'w')
 
@@ -519,7 +523,7 @@ def preprocess_dump(input_file, template_file, expand_templates=True):
 
 
 def process_dump_script(input_opened,input_file, out_file, file_size, file_compress,
-                 file_extension,urlbase):
+                 file_extension,urlbase, padding=minPadding):
     # Write to docs or to stdout.
 
     # Output configuration if path is stdout
@@ -529,7 +533,7 @@ def process_dump_script(input_opened,input_file, out_file, file_size, file_compr
             logging.warn("writing to stdout, so no output compression (use an external tool)")
     else:
         #output = out_file
-        nextFile = NextFile(out_file,file_extension)
+        nextFile = NextFile(out_file, file_extension, padding)
         output = OutputSplitter(nextFile, file_size, file_compress)
 
     ##
@@ -780,13 +784,24 @@ def main(*args, **kwargs):
         return process_dump_generator(input_opened,input_file, urlbase)
 
     else:  #Using the tool as a a script
+        # Calculate dynamic padding for output file names
+        try:
+            dump_size = os.path.getsize(input_file) if os.path.exists(input_file) else 0
+        except Exception:
+            dump_size = 0
+        if file_size and dump_size:
+            num_files = max(1, (dump_size + file_size - 1) // file_size)
+            padding = max(minPadding, len(str(num_files)))
+        else:
+            padding = minPadding
         process_dump_script(    input_opened = input_opened, 
                                 input_file = input_file,
                                 out_file = output_path,
                                 file_size=file_size,
                                 file_compress=args.compress,
                                 file_extension=file_extension,
-                                urlbase = urlbase
+                                urlbase = urlbase,
+                                padding = padding
                             )
 
 
