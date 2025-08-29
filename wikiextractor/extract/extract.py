@@ -91,6 +91,42 @@ _aux_template_coord_aux_var = ["""º""", """'""", """''""" ]
 
 # ======================================================================
 
+def remove_repeated_newline_dashes(text):
+    """
+    Remove sequences of repeated newline dashes and content in double curly brackets.
+    
+    Args:
+        text (str): Input text containing repeated newline dashes and {{ }} content
+        
+    Returns:
+        tuple: (cleaned_text, removed_content) where removed_content is a dict with
+               'curly_brackets' and 'newline_dashes' lists
+    """
+    # Pre-compile regex patterns for better performance
+    curly_pattern = re.compile(r'\{\{.*?\}\}', flags=re.DOTALL)
+    dash_pattern = re.compile(r'(\s*-\s*\n){2,}')
+    
+    removed_content = {
+        'curly_brackets': [],
+        'newline_dashes': []
+    }
+    
+    # Find and remove content inside double curly brackets
+    curly_matches = curly_pattern.findall(text)
+    removed_content['curly_brackets'] = curly_matches
+    text = curly_pattern.sub('', text)
+    
+    # Find and replace repeated newline dashes in one pass
+    dash_matches = []
+    def dash_replacer(match):
+        dash_matches.append(match.group(0))
+        return '\n'
+    
+    cleaned_text = dash_pattern.sub(dash_replacer, text)
+    removed_content['newline_dashes'] = dash_matches
+    
+    return cleaned_text, removed_content
+
 
 
 
@@ -234,6 +270,14 @@ def clean(extractor, text, expand_templates=False, language = None, html_safe=Tr
 
 
     #############################################
+
+    # Apply custom cleaning: remove repeated newline dashes and content in double curly brackets
+    text, removed_content = remove_repeated_newline_dashes(text)
+
+    # Append removed content to file
+    if removed_content:
+        with open('removed_content.txt', 'a', encoding='utf-8') as f:
+            f.write(removed_content + '\n')
 
     # Cleanup text
     text = text.replace('\t', ' ')
